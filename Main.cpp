@@ -32,8 +32,8 @@
 #include <cstdint>
 #include <termios.h>
 #include <unistd.h>
-#include <stdlib.h>
-#include <stdio.h>
+#include <cstdlib>
+#include <cstdio>
 #include <sys/ioctl.h>
 #include <cstring>
 #include <string>
@@ -45,18 +45,18 @@
 
 /** data **/
 
-typedef struct editorConfig
+using editorConfig_t = struct editorConfig
 {
     int screenrows;
     int screencols;
     struct termios org_termios{};
 
-} editorConfig_t;
+};
 
-editorConfig_t E;
+editorConfig_t e;
 
 /** terminal **/
-void die(const char *s)
+void Die(const char *s)
 {
     write(STDOUT_FILENO, "\x1b[2J", 4);
     write(STDOUT_FILENO, "\x1b[H", 3);
@@ -65,18 +65,20 @@ void die(const char *s)
     exit(1);
 }
 
-void disableRawMode()
+void DisableRawMode()
 {
-    if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &E.org_termios) == -1) die("tcsetattr") ;
+    if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &e.org_termios) == -1) { Die("tcsetattr") ;
+}
 }
 
-void enableRawMode()
+void EnableRawMode()
 {
-    if(tcgetattr(STDIN_FILENO, &E.org_termios) == -1) die("tcgetattr");
+    if(tcgetattr(STDIN_FILENO, &e.org_termios) == -1) { Die("tcgetattr");
+}
     // At exit(program exits) runs the function
-    atexit(disableRawMode);
+    atexit(DisableRawMode);
 
-    struct termios raw = E.org_termios;
+    struct termios raw = e.org_termios;
 
 
     // Iflags are for input flags
@@ -103,47 +105,54 @@ void enableRawMode()
     raw.c_cc[VTIME] = 1;
 
     // TCSAFLUSH is used to flus all the things after thsi func call
-    if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw) == -1) die("tcsetattr") ;
+    if (tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw) == -1) { Die("tcsetattr") ;
+}
 }
 
-char editorReadKey()
+char EditorReadKey()
 {
     int nread;
     char c;
     while ((nread = read(STDIN_FILENO, &c, 1)) != 1)
     {
-        if(nread == -1 && errno != EAGAIN) die("read");
+        if(nread == -1 && errno != EAGAIN) { Die("read");
+}
     }
     return c;
 }
 
-int getCursorPosition(int *rows, int *cols)
+int GetCursorPosition(int *rows, int *cols)
 {
     char buf[32];
     unsigned int i = 0;
     // n cmd gives the device info 6 as args give us the cursor pos
-  if (write(STDOUT_FILENO, "\x1b[6n", 4) != 4)
+  if (write(STDOUT_FILENO, "\x1b[6n", 4) != 4) {
       return -1;
+}
   while (i < sizeof(buf) - 1)
   {
-    if (read(STDIN_FILENO, &buf[i], 1) != 1)
+    if (read(STDIN_FILENO, &buf[i], 1) != 1) {
         break;
-    if (buf[i] == 'R')
+}
+    if (buf[i] == 'R') {
         break;
+}
     i++;
   }
   buf[i] = '\0';
 
-  if (buf[0] != '\x1b' || buf[1] != '[')
+  if (buf[0] != '\x1b' || buf[1] != '[') {
       return -1;
-  if (sscanf(&buf[2], "%d;%d", rows, cols) != 2)
+}
+  if (sscanf(&buf[2], "%d;%d", rows, cols) != 2) {
       return -1;
+}
 
   return 0;
 }
 
 
-int getWindowSize(int *rows, int *cols)
+int GetWindowSize(int *rows, int *cols)
 {
     struct winsize ws;
 
@@ -151,16 +160,16 @@ int getWindowSize(int *rows, int *cols)
     // returns -1 on error can even return row and cols as zero so we check both
     if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &ws) == -1 || ws.ws_col == 0)
     {
-        if (write(STDOUT_FILENO, "\x1b[999C\x1b[999B", 12) != 12)
+        if (write(STDOUT_FILENO, "\x1b[999C\x1b[999B", 12) != 12) {
             return -1;
-        return getCursorPosition(rows, cols);
+}
+        return GetCursorPosition(rows, cols);
     }
-    else
-    {
-        *cols = ws.ws_col;
+    
+            *cols = ws.ws_col;
         *rows = ws.ws_row;
         return 0;
-    }
+   
 }
 
 /* append buffer */
@@ -168,37 +177,38 @@ int getWindowSize(int *rows, int *cols)
 class AppendBuf
 {
 private:
-    char *m_b;
-    uint32_t m_len;
+    char *m_b{nullptr};
+    uint32_t m_len{0};
 
 public:
-    AppendBuf() : m_b(nullptr), m_len(0) {}
+    AppendBuf()  {}
 
-    ~AppendBuf() { }
+    ~AppendBuf() = default;
 
-    void append(const char *s, int len)
+    void Append(const char *s, int len)
     {
         char *num = (char*)realloc(m_b, m_len + len);
 
-        if (num == nullptr)
+        if (num == nullptr) {
             return;
+}
         memcpy(&num[m_len], s, len);
         m_b = num;
         m_len += len;
     }
 
-    static AppendBuf &instance()
+    static AppendBuf &Instance()
     {
         static AppendBuf obj;
         return obj;
     }
-    void remove()
+    void Remove()
     {
         free(m_b);
         m_b = nullptr;
         m_len = 0;
     }
-    void write_out()
+    void WriteOut()
     {
         write(STDOUT_FILENO, m_b, m_len);
     }
@@ -207,7 +217,7 @@ public:
 /* output */
 
 
-void editorRefreshScreen()
+void EditorRefreshScreen()
 {
   // escape sequence starts with escape character \x1b is 27byte <esc> followed by [
   // is a escape sequence
@@ -216,20 +226,20 @@ void editorRefreshScreen()
   // J corresponds to clearning the screen. 2 args means all the screena 1 for
   // before the cursor and 0(default)
   // for after the cursor to EOS
-    AppendBuf::instance().append("\x1b[2J", 4);
+    AppendBuf::Instance().Append("\x1b[2J", 4);
     // H for cursor pos control takes two args rowXcol. 12;4H args are seperated by ';'
     char tuff[32]; memset(tuff, 0, sizeof(tuff));
-    snprintf(tuff, sizeof(tuff), "\x1b[%d;%dH", E.screenrows / 2, E.screencols / 2);
-    AppendBuf::instance().append(tuff, strlen(tuff));
-    AppendBuf::instance().write_out();
-    AppendBuf::instance().remove();
+    snprintf(tuff, sizeof(tuff), "\x1b[%d;%dH", e.screenrows / 2, e.screencols / 2);
+    AppendBuf::Instance().Append(tuff, strlen(tuff));
+    AppendBuf::Instance().WriteOut();
+    AppendBuf::Instance().Remove();
 }
 
 /* input */
 
-void editorProcessKeyProcess()
+void EditorProcessKeyProcess()
 {
-    char c = editorReadKey();
+    char c = EditorReadKey();
 
     switch (c)
     {
@@ -242,7 +252,7 @@ void editorProcessKeyProcess()
 }
 
 /* Utils */
-size_t split(const std::string &txt, std::vector<std::string> &strs, char ch) {
+size_t Split(const std::string &txt, std::vector<std::string> &strs, char ch) {
   size_t pos = txt.find( ch );
   size_t initaiPos = 0;
   // strs.clear();
@@ -260,41 +270,45 @@ size_t split(const std::string &txt, std::vector<std::string> &strs, char ch) {
 
 /** Init  **/
 
-void initEditor()
+void InitEditor()
 {
-  if (getWindowSize(&E.screenrows, &E.screencols) == -1)
-      die("getWindowSize");
+  if (GetWindowSize(&e.screenrows, &e.screencols) == -1) {
+      Die("getWindowSize");
+}
 
 }
 
 int main(int argc, char *argv[])
 {
-    enableRawMode();
-    initEditor();
-    if (argc < 2)
-        die("no file provided");
+    EnableRawMode();
+    InitEditor();
+    if (argc < 2) {
+        Die("no file provided");
+}
 
     int speed{250000};
-    if (argc == 3)
-        speed = *((int*)argv[2]);
+    if (argc == 3) {
+        speed = std::stoi(argv[2]);
+}
     FILE *f = fopen(argv[1], "r");
-    if (!f) die("fopen");
+    if (f == nullptr) { Die("fopen");
+}
 
     fseek(f, 0, SEEK_END);
     long size = ftell(f);
     rewind(f);
 
     std::string content(size, '\0');
-    fread(&content[0], 1, size, f);
+    fread(content.data(), 1, size, f);
     fclose(f);
     std::vector<std::string> lund;
-    split(content, lund, ' ');
+    Split(content, lund, ' ');
 
     while (1)
     {
         for (std::string &k : lund)
         {
-            editorRefreshScreen();
+            EditorRefreshScreen();
             int mid = k.size() / 2;
 
             write(STDOUT_FILENO, k.substr(0, mid).c_str(), mid);
@@ -306,9 +320,9 @@ int main(int argc, char *argv[])
             int remaining = k.size() - mid - 1;
             write(STDOUT_FILENO, k.substr(mid + 1, remaining).c_str(), remaining);
 
-            usleep(250000);
+            usleep(speed);
         }
-        editorProcessKeyProcess();
+        EditorProcessKeyProcess();
     }
     return 0;
 }
