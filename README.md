@@ -1,4 +1,4 @@
-# FAFR
+# reader.cpp 
 
 Terminal: RSVP (Rapid Serial Visual Presentation)
 
@@ -6,13 +6,12 @@ Terminal: RSVP (Rapid Serial Visual Presentation)
 
 How to compile
 ```
-g++ Main.cpp -o main
+make
 ```
 
-How to use
-
+How to use:
 ```
-main <file_name> <time-interval>
+./run <file_name> <time-interval>
 ```
 
 ## // Licence
